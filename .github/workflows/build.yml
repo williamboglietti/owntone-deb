@@ -1,0 +1,84 @@
+name: Build
+
+# Construit le .deb d'OwnTone, vérifie qu'il n'embarque ni SSE4 ni AVX et qu'il s'installe
+# sur un Ubuntu 24.04 neuf. La publication d'une release est manuelle (workflow_dispatch,
+# publish=true) : rien n'est publié par une pull request.
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publier le .deb et son sha256 dans une release GitHub"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Même condensat que BUILD_IMAGE dans versions.env (vérifié par le test de cohérence).
+  BUILD_IMAGE: ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852
+
+jobs:
+  build:
+    runs-on: ${{ vars.RUNNER || 'ubuntu-24.04' }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Cohérence de l'image de build
+        run: |
+          . ./versions.env
+          [ "$BUILD_IMAGE" = "$(grep -m1 '^  BUILD_IMAGE:' .github/workflows/build.yml | awk '{print $2}')" ]
+
+      - name: Syntaxe des scripts
+        run: for f in build.sh build/*.sh build/postinst tests/*.sh; do bash -n "$f"; done
+
+      - name: Le contrôle SSE4/AVX refuse bien un binaire fautif
+        run: docker run --rm --platform linux/amd64 -v "$PWD:/src:ro" "$BUILD_IMAGE" bash /src/tests/check-baseline-test.sh
+
+      - name: Compiler le paquet
+        run: ./build.sh
+
+      - name: Installation sur un Ubuntu 24.04 neuf
+        run: docker run --rm --platform linux/amd64 -v "$PWD/dist:/dist:ro" -v "$PWD/tests:/tests:ro" "$BUILD_IMAGE" bash /tests/install-test.sh
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: owntone-deb
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    name: Publier la release
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    runs-on: ${{ vars.RUNNER || 'ubuntu-24.04' }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: owntone-deb
+          path: dist/
+
+      - name: Créer la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          . ./versions.env
+          tag="owntone-${OWNTONE_VERSION}-${DEB_REVISION}"
+          gh release create "$tag" dist/*.deb dist/*.sha256 \
+            --title "OwnTone ${OWNTONE_VERSION} (révision ${DEB_REVISION})" \
+            --notes "Paquet pour Ubuntu 24.04 amd64, x86-64 de base (sans SSE4 ni AVX). Source: owntone-${OWNTONE_VERSION}.tar.xz, sha256 ${OWNTONE_SHA256}."
+          cat dist/*.sha256

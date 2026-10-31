@@ -1,0 +1,12 @@
+#!/bin/sh
+# Mêmes gestes que `make install --enable-install-user`, appliqués à la machine cible.
+set -e
+if [ "$1" = configure ]; then
+  getent group owntone >/dev/null || groupadd --system owntone
+  getent passwd owntone >/dev/null || useradd --system --no-create-home --gid owntone \
+    --groups audio --shell /usr/sbin/nologin owntone
+  if getent group pulse-access >/dev/null; then usermod --append --groups pulse-access owntone; fi
+  install -d -o owntone -g owntone /var/cache/owntone /var/log/owntone
+  chown owntone:owntone /var/cache/owntone
+fi
+exit 0
