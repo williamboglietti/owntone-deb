@@ -3,7 +3,11 @@
 # unité systemd, absence de /etc/owntone.conf, bibliothèques résolues, réinstallation, purge.
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
-deb="$(ls /dist/owntone_*_amd64.deb)"
+architecture=$(dpkg --print-architecture)
+shopt -s nullglob
+packages=(/dist/owntone_*_"$architecture".deb)
+(( ${#packages[@]} == 1 )) || { echo "Expected one $architecture package" >&2; exit 1; }
+deb=${packages[0]}
 apt-get update -qq
 apt-get install -y -qq --no-install-recommends "$deb" >/dev/null
 /usr/sbin/owntone --version
