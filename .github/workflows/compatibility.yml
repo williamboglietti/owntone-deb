@@ -2,6 +2,8 @@ name: Compatibility investigation
 
 on:
   pull_request:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -63,6 +65,10 @@ jobs:
             echo "Original Ubuntu 24.04 package on $TARGET: installation test passed" | tee -a "$GITHUB_STEP_SUMMARY"
           else
             echo "Original Ubuntu 24.04 package on $TARGET: installation test failed" | tee -a "$GITHUB_STEP_SUMMARY"
+            if [[ "$TARGET" == noble ]]; then
+              exit 1
+            fi
+            echo "::warning::The existing Ubuntu 24.04 package did not pass the installation test on $TARGET; see the logs."
           fi
       - name: Build on the target distribution and architecture
         env:
