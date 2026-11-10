@@ -12,10 +12,11 @@ for name in APT_SFTP_HOST APT_SFTP_USER APT_SFTP_PASSWORD APT_SFTP_KNOWN_HOSTS; 
     exit 1
   fi
 done
-[[ -d "$repo/dists/noble" && -d "$repo/pool/noble" ]] || {
-  echo "Repository is missing the noble suite" >&2
-  exit 1
-}
+for suite in noble resolute trixie; do
+  [[ -f "$repo/dists/$suite/InRelease" && -d "$repo/pool/$suite" ]] || {
+    echo "Repository is missing the $suite suite" >&2; exit 1
+  }
+done
 
 work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
@@ -33,7 +34,21 @@ commands="$work/lftp.cmd"
   echo "set net:timeout 30"
   echo "set sftp:connect-program \"ssh -a -x -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known_hosts\""
   printf '%s\n' "open -u \"$APT_SFTP_USER,$APT_SFTP_PASSWORD\" \"sftp://$APT_SFTP_HOST\""
-  printf '%s\n' "mirror --reverse --verbose \"$repo\" \"root/apt\""
+  # Create parents on first publication, then upload immutable content first.
+  echo 'mkdir -p root/apt/pool root/apt/dists'
+  for suite in noble resolute trixie; do
+    printf '%s\n' "mkdir -p \"root/apt/dists/$suite\""
+  done
+  printf '%s\n' "mirror --reverse --verbose \"$repo/pool\" \"root/apt/pool\""
+  printf '%s\n' "put -o \"root/apt/boglietti-apt.gpg.tmp\" \"$repo/boglietti-apt.gpg\""
+  printf '%s\n' 'mv root/apt/boglietti-apt.gpg.tmp root/apt/boglietti-apt.gpg'
+  for suite in noble resolute trixie; do
+    printf '%s\n' "mirror --reverse --verbose --exclude-glob=InRelease --exclude-glob=Release --exclude-glob=Release.gpg \"$repo/dists/$suite\" \"root/apt/dists/$suite\""
+    for file in Release Release.gpg InRelease; do
+      printf '%s\n' "put -o \"root/apt/dists/$suite/$file.tmp\" \"$repo/dists/$suite/$file\""
+      printf '%s\n' "mv \"root/apt/dists/$suite/$file.tmp\" \"root/apt/dists/$suite/$file\""
+    done
+  done
   printf '%s\n' "bye"
 } > "$commands"
 lftp -f "$commands"
