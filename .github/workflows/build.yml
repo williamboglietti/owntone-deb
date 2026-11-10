@@ -194,12 +194,12 @@ jobs:
     name: Publier dans APT
     needs: [build, native-build-and-install, signed-repository-test, apt-installation-test]
     if: >-
-      vars.BOGLIETTI_APT_PUBLISH_ENABLED == 'true' &&
+      vars.BOGLIETTI_APT_DEPLOY_ENABLED == 'true' &&
       github.ref == 'refs/heads/main' &&
       ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
        (github.event_name == 'workflow_dispatch' && inputs.publish))
     runs-on: ubuntu-24.04
-    environment: apt-production
+    environment: prod
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
