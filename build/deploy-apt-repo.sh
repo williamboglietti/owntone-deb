@@ -34,7 +34,11 @@ commands="$work/lftp.cmd"
   echo "set net:timeout 30"
   echo "set sftp:connect-program \"ssh -a -x -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known_hosts\""
   printf '%s\n' "open -u \"$APT_SFTP_USER,$APT_SFTP_PASSWORD\" \"sftp://$APT_SFTP_HOST\""
-  # Upload immutable packages and indexes before switching signed releases.
+  # Create parents on first publication, then upload immutable content first.
+  echo 'mkdir -p root/apt/pool root/apt/dists'
+  for suite in noble resolute trixie; do
+    printf '%s\n' "mkdir -p \"root/apt/dists/$suite\""
+  done
   printf '%s\n' "mirror --reverse --verbose \"$repo/pool\" \"root/apt/pool\""
   printf '%s\n' "put -o \"root/apt/boglietti-apt.gpg.tmp\" \"$repo/boglietti-apt.gpg\""
   printf '%s\n' 'mv root/apt/boglietti-apt.gpg.tmp root/apt/boglietti-apt.gpg'
