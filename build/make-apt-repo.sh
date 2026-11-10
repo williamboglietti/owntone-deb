@@ -98,7 +98,8 @@ for suite in "${suites[@]}"; do
     -o "APT::FTPArchive::Release::Acquire-By-Hash=yes" \
     -o "APT::FTPArchive::Release::Architectures=amd64 arm64" \
     -o "APT::FTPArchive::Release::ValidTime=2592000" \
-    release "$out/dists/$suite" > "$out/dists/$suite/Release"
+    release "$out/dists/$suite" > "$work/$suite.Release"
+  install -m 0644 "$work/$suite.Release" "$out/dists/$suite/Release"
   sign --clearsign --output "$out/dists/$suite/InRelease" "$out/dists/$suite/Release"
   sign --armor --detach-sign --output "$out/dists/$suite/Release.gpg" "$out/dists/$suite/Release"
   gpg --batch --quiet --verify "$out/dists/$suite/InRelease"
