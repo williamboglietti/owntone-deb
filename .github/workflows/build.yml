@@ -8,7 +8,69 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
-      native-build-and-install:
+      publish:
+        description: "Publier sur le dépôt APT après les contrôles"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Même condensat que BUILD_IMAGE dans versions.env (vérifié par le test de cohérence).
+  BUILD_IMAGE: ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Cohérence de l'image de build
+        run: |
+          . ./versions.env
+          [ "$BUILD_IMAGE" = "$(grep -m1 '^  BUILD_IMAGE:' .github/workflows/build.yml | awk '{print $2}')" ]
+
+      - name: Outils d'index APT
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y apt-utils gnupg
+
+      - name: Syntaxe des scripts
+        run: for f in build.sh build/*.sh build/postinst tests/*.sh; do bash -n "$f"; done
+
+      - name: Shellcheck
+        run: shellcheck -S warning -s bash build.sh build/*.sh build/postinst tests/*.sh
+
+      - name: Le contrôle SSE4/AVX refuse bien un binaire fautif
+        run: docker run --rm --platform linux/amd64 -v "$PWD:/src:ro" "$BUILD_IMAGE" bash /src/tests/check-baseline-test.sh
+
+      - name: Compiler le paquet
+        run: ./build.sh
+
+      - name: Vérifier les métadonnées publiques
+        run: bash tests/public-surface-test.sh
+
+      - name: Installation sur un Ubuntu 24.04 neuf
+        run: docker run --rm --platform linux/amd64 -v "$PWD/dist:/dist:ro" -v "$PWD/tests:/tests:ro" "$BUILD_IMAGE" bash /tests/install-test.sh
+
+      - name: Vérifier le dépôt APT signé avec une clé jetable
+        run: bash tests/apt-repo-test.sh
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: owntone-deb
+          path: dist/
+          if-no-files-found: error
+
+  native-build-and-install:
     name: ${{ matrix.target }} / ${{ matrix.arch }}
     strategy:
       fail-fast: false
@@ -121,109 +183,6 @@ on:
             sleep 0.2
           done
           docker run --rm --network host -e "TARGET=$TARGET" -v "$PWD/test-repo/boglietti-apt.gpg:/test-key.gpg:ro" -v "$PWD/tests:/tests:ro" "$IMAGE" bash /tests/install-from-apt.sh
-
-  publish:
-        description: "Publier sur le dépôt APT après les contrôles"
-        type: boolean
-        default: false
-
-permissions:
-  contents: read
-
-concurrency:
-  group: build-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
-env:
-  # Même condensat que BUILD_IMAGE dans versions.env (vérifié par le test de cohérence).
-  BUILD_IMAGE: ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852
-
-jobs:
-  build:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Cohérence de l'image de build
-        run: |
-          . ./versions.env
-          [ "$BUILD_IMAGE" = "$(grep -m1 '^  BUILD_IMAGE:' .github/workflows/build.yml | awk '{print $2}')" ]
-
-      - name: Outils d'index APT
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y apt-utils gnupg
-
-      - name: Syntaxe des scripts
-        run: for f in build.sh build/*.sh build/postinst tests/*.sh; do bash -n "$f"; done
-
-      - name: Shellcheck
-        run: shellcheck -S warning -s bash build.sh build/*.sh build/postinst tests/*.sh
-
-      - name: Le contrôle SSE4/AVX refuse bien un binaire fautif
-        run: docker run --rm --platform linux/amd64 -v "$PWD:/src:ro" "$BUILD_IMAGE" bash /src/tests/check-baseline-test.sh
-
-      - name: Compiler le paquet
-        run: ./build.sh
-
-      - name: Vérifier les métadonnées publiques
-        run: bash tests/public-surface-test.sh
-
-      - name: Installation sur un Ubuntu 24.04 neuf
-        run: docker run --rm --platform linux/amd64 -v "$PWD/dist:/dist:ro" -v "$PWD/tests:/tests:ro" "$BUILD_IMAGE" bash /tests/install-test.sh
-
-      - name: Vérifier le dépôt APT signé avec une clé jetable
-        run: bash tests/apt-repo-test.sh
-
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: owntone-deb
-          path: dist/
-          if-no-files-found: error
-
-  native-build-and-install:
-    name: ${{ matrix.target }} / ${{ matrix.arch }}
-    strategy:
-      fail-fast: false
-      matrix:
-        target: [noble, resolute, trixie]
-        arch: [amd64, arm64]
-        include:
-          - target: noble
-            image: ubuntu:24.04
-          - target: resolute
-            image: ubuntu:26.04
-          - target: trixie
-            image: debian:13
-          - arch: amd64
-            runner: ubuntu-24.04
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Build on the target distribution and architecture
-        env:
-          IMAGE: ${{ matrix.image }}
-          TARGET: ${{ matrix.target }}
-        run: |
-          mkdir -p dist
-          docker run --rm -e "TARGET_CODENAME=$TARGET" -v "$PWD:/src:ro" -v "$PWD/dist:/out" "$IMAGE" bash /src/build/build-deb.sh
-      - name: Install and check package
-        env:
-          IMAGE: ${{ matrix.image }}
-        run: docker run --rm -v "$PWD/dist:/dist:ro" -v "$PWD/tests:/tests:ro" "$IMAGE" bash /tests/install-test.sh
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: package-${{ matrix.target }}-${{ matrix.arch }}
-          path: dist/*.deb
-          if-no-files-found: error
 
   publish:
     name: Publier dans APT
