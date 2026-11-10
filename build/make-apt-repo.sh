@@ -75,6 +75,18 @@ for suite in "${suites[@]}"; do
       cd "$out"
       apt-ftparchive packages "pool/$suite/$architecture" > "dists/$suite/main/binary-$architecture/Packages"
       gzip -9n < "dists/$suite/main/binary-$architecture/Packages" > "dists/$suite/main/binary-$architecture/Packages.gz"
+      index="dists/$suite/main/binary-$architecture"
+      for file in Packages Packages.gz; do
+        for algorithm in SHA256 SHA512; do
+          mkdir -p "$index/by-hash/$algorithm"
+          if [[ "$algorithm" == SHA256 ]]; then
+            digest=$(sha256sum "$index/$file" | cut -d' ' -f1)
+          else
+            digest=$(sha512sum "$index/$file" | cut -d' ' -f1)
+          fi
+          cp "$index/$file" "$index/by-hash/$algorithm/$digest"
+        done
+      done
     )
   done
   apt-ftparchive \
@@ -83,6 +95,7 @@ for suite in "${suites[@]}"; do
     -o "APT::FTPArchive::Release::Suite=$suite" \
     -o "APT::FTPArchive::Release::Codename=$suite" \
     -o "APT::FTPArchive::Release::Components=main" \
+    -o "APT::FTPArchive::Release::Acquire-By-Hash=yes" \
     -o "APT::FTPArchive::Release::Architectures=amd64 arm64" \
     -o "APT::FTPArchive::Release::ValidTime=2592000" \
     release "$out/dists/$suite" > "$out/dists/$suite/Release"

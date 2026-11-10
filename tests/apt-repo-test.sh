@@ -49,9 +49,13 @@ gpgv --keyring "$repo/boglietti-apt.gpg" "$repo/dists/noble/InRelease" >/dev/nul
 grep -q 'Components: main' "$repo/dists/noble/Release"
 for suite in noble resolute trixie; do
   gpgv --keyring "$repo/boglietti-apt.gpg" "$repo/dists/$suite/InRelease" >/dev/null
+  grep -q '^Acquire-By-Hash: yes' "$repo/dists/$suite/Release"
   for architecture in amd64 arm64; do
     grep -q 'owntone' "$repo/dists/$suite/main/binary-$architecture/Packages"
     grep -q "Architecture: $architecture" "$repo/dists/$suite/main/binary-$architecture/Packages"
+    index="$repo/dists/$suite/main/binary-$architecture/Packages.gz"
+    digest=$(sha512sum "$index" | cut -d' ' -f1)
+    cmp -s "$index" "$(dirname "$index")/by-hash/SHA512/$digest"
   done
 done
 

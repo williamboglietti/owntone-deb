@@ -34,7 +34,17 @@ commands="$work/lftp.cmd"
   echo "set net:timeout 30"
   echo "set sftp:connect-program \"ssh -a -x -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known_hosts\""
   printf '%s\n' "open -u \"$APT_SFTP_USER,$APT_SFTP_PASSWORD\" \"sftp://$APT_SFTP_HOST\""
-  printf '%s\n' "mirror --reverse --verbose \"$repo\" \"root/apt\""
+  # Upload immutable packages and indexes before switching signed releases.
+  printf '%s\n' "mirror --reverse --verbose \"$repo/pool\" \"root/apt/pool\""
+  printf '%s\n' "put -o \"root/apt/boglietti-apt.gpg.tmp\" \"$repo/boglietti-apt.gpg\""
+  printf '%s\n' 'mv root/apt/boglietti-apt.gpg.tmp root/apt/boglietti-apt.gpg'
+  for suite in noble resolute trixie; do
+    printf '%s\n' "mirror --reverse --verbose --exclude-glob=InRelease --exclude-glob=Release --exclude-glob=Release.gpg \"$repo/dists/$suite\" \"root/apt/dists/$suite\""
+    for file in Release Release.gpg InRelease; do
+      printf '%s\n' "put -o \"root/apt/dists/$suite/$file.tmp\" \"$repo/dists/$suite/$file\""
+      printf '%s\n' "mv \"root/apt/dists/$suite/$file.tmp\" \"root/apt/dists/$suite/$file\""
+    done
+  done
   printf '%s\n' "bye"
 } > "$commands"
 lftp -f "$commands"
