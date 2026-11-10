@@ -178,7 +178,7 @@ jobs:
           python3 -m http.server 8765 --bind 127.0.0.1 --directory test-repo > "$RUNNER_TEMP/apt-http.log" 2>&1 &
           server=$!
           trap 'kill "$server"' EXIT
-          for i in {1..50}; do
+          for ((attempt=0; attempt<50; attempt++)); do
             if curl -fsS http://127.0.0.1:8765/boglietti-apt.gpg -o /dev/null; then break; fi
             sleep 0.2
           done
