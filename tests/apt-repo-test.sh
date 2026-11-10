@@ -96,7 +96,7 @@ cmp -s "$repo/pool/noble/amd64/owntone_0.0.1-1noble1_amd64.deb" "$downloaded"
 # The signed Packages index must reject a package changed after it was indexed.
 package="$repo/pool/noble/amd64/owntone_0.0.1-1noble1_amd64.deb"
 cp "$package" "$work/original.deb"
-printf 'tampered' >> "$package"
+printf 'X' | dd of="$package" bs=1 count=1 conv=notrunc 2>/dev/null
 mkdir -p "$work/tampered-download"
 if (cd "$work/tampered-download" && apt-get "${apt_options[@]}" download owntone >"$work/tampered.log" 2>&1); then
   echo "APT accepted a package with an invalid checksum" >&2
