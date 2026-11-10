@@ -64,6 +64,9 @@ jobs:
       - name: Vérifier le dépôt APT signé avec une clé jetable
         run: bash tests/apt-repo-test.sh
 
+      - name: Vérifier le déploiement SFTP simulé
+        run: bash tests/deploy-apt-repo-test.sh
+
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: owntone-deb
