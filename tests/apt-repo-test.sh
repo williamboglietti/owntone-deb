@@ -14,18 +14,22 @@ cleanup() {
 }
 trap cleanup EXIT
 
-package_root="$work/package"
-mkdir -p "$package_root/DEBIAN" "$work/debs"
-cat > "$package_root/DEBIAN/control" <<'CONTROL'
+for suite in noble resolute trixie; do
+  for architecture in amd64 arm64; do
+    package_root="$work/package-$suite-$architecture"
+    mkdir -p "$package_root/DEBIAN" "$work/debs/$suite/$architecture"
+    cat > "$package_root/DEBIAN/control" <<CONTROL
 Package: owntone
-Version: 0.0.1-test
+Version: 0.0.1-1${suite}1
 Section: sound
 Priority: optional
-Architecture: amd64
+Architecture: $architecture
 Maintainer: BOGLIETTI <security@boglietti.org>
 Description: Test package for signed APT repository verification
 CONTROL
-dpkg-deb --root-owner-group --build "$package_root" "$work/debs/owntone_0.0.1-test_amd64.deb" >/dev/null
+    dpkg-deb --root-owner-group --build "$package_root" "$work/debs/$suite/$architecture/owntone_0.0.1-1${suite}1_${architecture}.deb" >/dev/null
+  done
+done
 
 test_key_home="$work/test-key"
 install -d -m 0700 "$test_key_home"
@@ -41,7 +45,13 @@ repo="$work/repo"
 bash "$root/build/make-apt-repo.sh" "$work/debs" "$repo"
 gpgv --keyring "$repo/boglietti-apt.gpg" "$repo/dists/noble/InRelease" >/dev/null
 grep -q 'Components: main' "$repo/dists/noble/Release"
-grep -q 'owntone' "$repo/dists/noble/main/binary-amd64/Packages"
+for suite in noble resolute trixie; do
+  gpgv --keyring "$repo/boglietti-apt.gpg" "$repo/dists/$suite/InRelease" >/dev/null
+  for architecture in amd64 arm64; do
+    grep -q 'owntone' "$repo/dists/$suite/main/binary-$architecture/Packages"
+    grep -q "Architecture: $architecture" "$repo/dists/$suite/main/binary-$architecture/Packages"
+  done
+done
 
 port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')
 (
@@ -50,7 +60,11 @@ port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); p
 ) >"$work/http.log" 2>&1 &
 server_pid=$!
 sleep 1
-APT_VERIFY_PROTO=http bash "$root/build/verify-apt-repo.sh" "http://127.0.0.1:$port" noble "$repo"
+for suite in noble resolute trixie; do
+  for architecture in amd64 arm64; do
+    APT_VERIFY_PROTO=http bash "$root/build/verify-apt-repo.sh" "http://127.0.0.1:$port" "$suite" "$repo" "$architecture"
+  done
+done
 
 mkdir -p "$work/apt/lists/partial" "$work/apt/cache/archives/partial" "$work/download"
 cp "$repo/boglietti-apt.gpg" "$work/apt/keyring.gpg"
@@ -71,7 +85,7 @@ apt-get "${apt_options[@]}" update >/dev/null
 )
 downloaded=$(find "$work/download" -name 'owntone_*.deb' -print -quit)
 [[ -n "$downloaded" ]]
-cmp -s "$repo/pool/noble/owntone_0.0.1-test_amd64.deb" "$downloaded"
+cmp -s "$repo/pool/noble/amd64/owntone_0.0.1-1noble1_amd64.deb" "$downloaded"
 
 wrong_home="$work/wrong-key"
 install -d -m 0700 "$wrong_home"

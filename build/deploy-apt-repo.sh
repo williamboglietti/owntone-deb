@@ -12,10 +12,11 @@ for name in APT_SFTP_HOST APT_SFTP_USER APT_SFTP_PASSWORD APT_SFTP_KNOWN_HOSTS; 
     exit 1
   fi
 done
-[[ -d "$repo/dists/noble" && -d "$repo/pool/noble" ]] || {
-  echo "Repository is missing the noble suite" >&2
-  exit 1
-}
+for suite in noble resolute trixie; do
+  [[ -f "$repo/dists/$suite/InRelease" && -d "$repo/pool/$suite" ]] || {
+    echo "Repository is missing the $suite suite" >&2; exit 1
+  }
+done
 
 work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
