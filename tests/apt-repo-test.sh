@@ -89,6 +89,18 @@ downloaded=$(find "$work/download" -name 'owntone_*.deb' -print -quit)
 [[ -n "$downloaded" ]]
 cmp -s "$repo/pool/noble/amd64/owntone_0.0.1-1noble1_amd64.deb" "$downloaded"
 
+# The signed Packages index must reject a package changed after it was indexed.
+package="$repo/pool/noble/amd64/owntone_0.0.1-1noble1_amd64.deb"
+cp "$package" "$work/original.deb"
+printf 'tampered' >> "$package"
+mkdir -p "$work/tampered-download"
+if (cd "$work/tampered-download" && apt-get "${apt_options[@]}" download owntone >"$work/tampered.log" 2>&1); then
+  echo "APT accepted a package with an invalid checksum" >&2
+  exit 1
+fi
+grep -qi 'hash sum mismatch' "$work/tampered.log" || { cat "$work/tampered.log" >&2; exit 1; }
+cp "$work/original.deb" "$package"
+
 wrong_home="$work/wrong-key"
 install -d -m 0700 "$wrong_home"
 GNUPGHOME="$wrong_home" gpg --batch --pinentry-mode loopback --passphrase '' \
