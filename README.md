@@ -18,7 +18,7 @@ Le script choisira la suite et l'architecture, vérifiera l'empreinte de la clé
 
 ## Publication APT
 
-La CI construit chaque paquet dans sa distribution cible, teste son installation, puis rassemble les six artefacts dans un dépôt signé avec une clé temporaire. Elle teste enfin l'installation de chaque variante avec APT sur des runners natifs. La publication reste désactivée tant que les secrets et la clé de production ne sont pas configurés.
+La CI attribue une version unique à chaque construction pour éviter de remplacer un paquet déjà publié. Elle construit chaque paquet dans sa distribution cible, teste son installation, puis rassemble les six artefacts dans un dépôt signé avec une clé temporaire. Elle teste enfin l'installation de chaque variante avec APT sur des runners natifs. La publication reste désactivée tant que les secrets et la clé de production ne sont pas configurés.
 
 Le dépôt comporte trois suites (`noble`, `resolute`, `trixie`), avec un index `main` par architecture. Les fichiers `InRelease` et `Release.gpg` sont signés : APT vérifie la signature puis les sommes de contrôle des index et des paquets. Les `.deb` ne sont pas signés individuellement.
 

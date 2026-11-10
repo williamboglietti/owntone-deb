@@ -98,9 +98,10 @@ jobs:
         env:
           IMAGE: ${{ matrix.image }}
           TARGET: ${{ matrix.target }}
+          PACKAGE_BUILD_ID: ${{ github.run_id }}.${{ github.run_attempt }}
         run: |
           mkdir -p dist
-          docker run --rm -e "TARGET_CODENAME=$TARGET" -v "$PWD:/src:ro" -v "$PWD/dist:/out" "$IMAGE" bash /src/build/build-deb.sh
+          docker run --rm -e "TARGET_CODENAME=$TARGET" -e "PACKAGE_BUILD_ID=$PACKAGE_BUILD_ID" -v "$PWD:/src:ro" -v "$PWD/dist:/out" "$IMAGE" bash /src/build/build-deb.sh
       - name: Install and check package
         env:
           IMAGE: ${{ matrix.image }}
@@ -132,6 +133,8 @@ jobs:
               cp artifacts/package-"$suite"-"$arch"/*.deb "dist/$suite/$arch/"
             done
           done
+      - name: Install repository tools
+        run: sudo apt-get update && sudo apt-get install -y apt-utils gnupg
       - name: Generate throwaway signing key and repository
         run: bash tests/build-test-repository.sh dist "$RUNNER_TEMP/test-repo"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
