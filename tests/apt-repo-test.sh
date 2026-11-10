@@ -34,11 +34,13 @@ done
 test_key_home="$work/test-key"
 install -d -m 0700 "$test_key_home"
 GNUPGHOME="$test_key_home" gpg --batch --pinentry-mode loopback --passphrase test-passphrase \
-  --quick-gen-key "APT test signing <apt-test@example.invalid>" ed25519 sign 1d >/dev/null 2>&1
+  --quick-gen-key "APT test signing <apt-test@example.invalid>" ed25519 cert 1d >/dev/null 2>&1
 fingerprint=$(GNUPGHOME="$test_key_home" gpg --batch --with-colons --list-secret-keys |
   awk -F: '$1 == "sec" { secret = 1; next } secret && $1 == "fpr" { print toupper($10); exit }')
+GNUPGHOME="$test_key_home" gpg --batch --pinentry-mode loopback --passphrase test-passphrase \
+  --quick-add-key "$fingerprint" ed25519 sign 1d >/dev/null 2>&1
 APT_SIGNING_KEY=$(GNUPGHOME="$test_key_home" gpg --batch --pinentry-mode loopback \
-  --passphrase test-passphrase --armor --export-secret-keys "$fingerprint")
+  --passphrase test-passphrase --armor --export-secret-subkeys "$fingerprint")
 export APT_SIGNING_KEY APT_SIGNING_FINGERPRINT="$fingerprint" APT_SIGNING_PASSPHRASE=test-passphrase
 
 repo="$work/repo"
