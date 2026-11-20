@@ -6,6 +6,11 @@ set -euo pipefail
 base=$1
 suite=$2
 repo=$3
+architecture=${4:-$(dpkg --print-architecture)}
+case "$suite:$architecture" in
+  noble:amd64|noble:arm64|resolute:amd64|resolute:arm64|trixie:amd64|trixie:arm64) ;;
+  *) echo "Unsupported suite or architecture" >&2; exit 1 ;;
+esac
 proto=$(printenv APT_VERIFY_PROTO 2>/dev/null || true)
 [ -n "$proto" ] || proto=https
 [[ "$base" == https://* || "$proto" == http ]] || {
@@ -41,21 +46,23 @@ cmp -s "$work/download" "$repo/boglietti-apt.gpg" || {
 done
 
 install -d "$work/apt/lists/partial" "$work/apt/cache/archives/partial" "$work/downloaded-debs"
-printf 'deb [signed-by=%s] %s %s main\n' "$repo/boglietti-apt.gpg" "$base" "$suite" > "$work/apt/sources.list"
+printf 'deb [arch=%s signed-by=%s] %s %s main\n' "$architecture" "$repo/boglietti-apt.gpg" "$base" "$suite" > "$work/apt/sources.list"
 apt_options=(
   -o "Dir::Etc::sourcelist=$work/apt/sources.list"
   -o Dir::Etc::sourceparts=/nonexistent
   -o "Dir::State::Lists=$work/apt/lists"
   -o "Dir::Cache=$work/apt/cache"
+  -o "APT::Architecture=$architecture"
+  -o "APT::Architectures=$architecture"
   -o Debug::NoLocking=1
   -o "APT::Sandbox::User=$(id -un)"
 )
 apt-get "${apt_options[@]}" update >/dev/null
 (
   cd "$work/downloaded-debs"
-  apt-get "${apt_options[@]}" download owntone >/dev/null
+  apt-get "${apt_options[@]}" download "owntone:$architecture" >/dev/null
 )
-local_deb=$(cd "$repo" && find pool -name '*.deb' -print -quit)
+local_deb=$(cd "$repo" && find "pool/$suite/$architecture" -name '*.deb' -print -quit)
 downloaded_deb=$(find "$work/downloaded-debs" -name 'owntone_*.deb' -print -quit)
 [[ -n "$local_deb" && -n "$downloaded_deb" ]] || {
   echo "OwnTone package was not found in the local or published repository" >&2

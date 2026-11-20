@@ -66,6 +66,10 @@ depends="$(dpkg-shlibdeps -O --ignore-missing-info "${elfs[@]}" 2>/dev/null | se
 [ -n "$depends" ] || { echo "Aucune dépendance relevée : abandon." >&2; exit 1; }
 
 version="$OWNTONE_VERSION-${DEB_REVISION}${codename}1"
+if [[ -n "${PACKAGE_BUILD_ID:-}" ]]; then
+  [[ "$PACKAGE_BUILD_ID" =~ ^[0-9]+\.[0-9]+$ ]] || { echo "Invalid package build ID" >&2; exit 1; }
+  version+="+ci${PACKAGE_BUILD_ID}"
+fi
 install -d "$pkg/DEBIAN"
 cat > "$pkg/DEBIAN/control" <<CONTROL
 Package: owntone
