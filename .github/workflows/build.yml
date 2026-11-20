@@ -1,7 +1,8 @@
 name: Build
 
 # Construit et vérifie le paquet sur les PR et main.
-# La publication APT est réservée à main et activée après provisionnement des secrets.
+# La publication APT est réservée à main (environnement prod) et ne part que si la
+# variable de dépôt BOGLIETTI_APT_DEPLOY_ENABLED vaut true.
 on:
   pull_request:
   push:
